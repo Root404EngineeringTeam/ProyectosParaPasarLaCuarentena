@@ -1,0 +1,100 @@
+-
+   -
+      - baja el volumen
+      - sube el volumen
+   - volume
+-
+   -
+      - pausa
+      - detener musica
+      - pausar musica
+      - deten la musica
+      - pausa la musica
+   - pause_music
+-
+   -
+      - deja el canal de voz
+      - sal del canal de voz
+      - abandona el canal de voz
+      - fuera del canal de voz
+      - largo del canal de voz
+      - sal de la llamada
+   - leave_voice_channel
+-
+   -
+      - play
+      - que suene la musica
+      - quita la pausa
+      - play a la musica
+   - resume_music
+-
+   -
+      - pon
+      - pon musica
+      - quiero escuchar una cancion
+      - pon una cancion
+      - reproduce musica
+      - reproduce una cancion
+      - pon algo de musica
+      - quiero escuchar musica
+      - quiero escuchar algo de musica
+   - play_music
+-
+   -
+      - busca
+      - busca la cancion
+      - busca una cancion
+      - busca esta cancion
+      - busca esto
+      - busca esto en youtube
+      - busca canciones de esto
+      - busca canciones de esta banda
+   - yt_search
+-
+   -
+      - que pasa con el covid
+      - como va el covid
+      - cual es el avance del coronavirus
+      - que esta pasando con el covid
+   - covid
+-
+   -
+      - manda nudes
+      - quiero ver chichis
+      - modo sexo
+      - ando bien electrico
+      - saca las panochas
+      - pasa unos nudes
+      - pasa unas imagenes sensuales
+      - manda algo ricolino
+   - send_nudes
+-
+   -
+      - programa un recordatorio
+      - recuerdame mas tarde
+      - avisame
+      - programa un aviso
+      - crea un recordatorio
+   - reminder
+-
+   -
+      - mandame un chiste
+      - cuentame un chiste
+      - conoces algun chiste
+      - sabes contar chistes
+      - te sabes algun chiste
+   - joke
+-
+   -
+      - estaria bueno un meme
+      - manda un meme
+      - quiero ver un meme
+      - te gustan los memes
+   - meme
+-
+   -
+      - nada mejor olvidalo
+      - ya nada
+      - olvidalo me equivoque
+      - ya no quiero nada
+   - clear_context
