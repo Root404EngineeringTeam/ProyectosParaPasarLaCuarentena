@@ -2,7 +2,7 @@
 
 Ideas para diversos proyectos (de preferencia no muy grandes y/o complejos) para  tener algo qué hacer.
 
-# ToDo
+## ToDo
 
 - Bot para discord en python
   - MusicPlayer
@@ -12,3 +12,7 @@ Ideas para diversos proyectos (de preferencia no muy grandes y/o complejos) para
   - MusicPlayer
   - Procesamiento de lenguaje natural
   - Diversas utilidades
+  
+## Discord
+
+[¡Únete a nuestro servidor en discord!](https://discord.gg/96aCQtv)
