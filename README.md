@@ -1,7 +1,6 @@
 # ProyectosParaPasarLaCuarentena
 
 Ideas para diversos proyectos (de preferencia no muy grandes y/o complejos) para  tener algo qué hacer.
-
 ## ToDo
 
 - Bot para discord en python
@@ -26,6 +25,7 @@ Ideas para diversos proyectos (de preferencia no muy grandes y/o complejos) para
     - [ ] Establer carpeta donde se descargará todo.
     - [ ] Establecer expresión regular para el nombramiento de archivos descargados.
 - [ ] Game Engine para juegos 2D en C++
+- [ ] Webhook para que el bot nos avise cuando haya cambios en el repositorio.
 
 ## Discord
 
