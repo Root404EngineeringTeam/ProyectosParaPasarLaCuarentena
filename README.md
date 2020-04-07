@@ -20,6 +20,7 @@ Ideas para diversos proyectos (de preferencia no muy grandes y/o complejos) para
 - Speech to text en python para implementarlo en los bots
 - Cifrado de imagenes con python
 - VoIP con Rust
+- Game Engine para juegos 2D en C++
 
 ## Discord
 
