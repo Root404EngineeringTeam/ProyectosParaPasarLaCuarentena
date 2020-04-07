@@ -23,6 +23,8 @@ Ideas para diversos proyectos (de preferencia no muy grandes y/o complejos) para
     - [ ] Filtrar por tipo de archivo (webm, gif, png, etc).
     - [ ] Establecer límite de archivos (solo descarga archivos que pesen más que o menos que).
     - [ ] Establer offset y limit (cuántos archivos omitir y cuántos se quiere descargar).
+    - [ ] Establer carpeta donde se descargará todo.
+    - [ ] Establecer expresión regular para el nombramiento de archivos descargados.
 - [ ] Game Engine para juegos 2D en C++
 
 ## Discord
