@@ -19,7 +19,8 @@ Ideas para diversos proyectos (de preferencia no muy grandes y/o complejos) para
 - Red neuronal para detectar intenciones (probar varias arquitecturas, LSTM y CNN) si los resultados son buenos se puede implementar en los bots
 - Speech to text en python para implementarlo en los bots
 - Cifrado de imagenes con python
-  
+- VoIP con Rust
+
 ## Discord
 
 [¡Únete a nuestro servidor en discord!](https://discord.gg/96aCQtv)
