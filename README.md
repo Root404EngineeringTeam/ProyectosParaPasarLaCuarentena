@@ -3,7 +3,7 @@
 Ideas para diversos proyectos (de preferencia no muy grandes y/o complejos) para  tener algo qué hacer.
 ## ToDo
 
-- Bot para discord en python
+- Bot para discord en python ([@0oeduardoo0](https://github.com/0oeduardoo0))
   - [ ] MusicPlayer
   - [ ] Procesamiento de lenguaje natural
   - [ ] Diversas utilidades
