@@ -1,5 +1,12 @@
 -
    -
+      - lista de canciones
+      - que canciones tienes
+      - canciones decargadas
+   - list_downloaded_songs
+-
+   -
+      - volumen
       - baja el volumen
       - sube el volumen
    - volume

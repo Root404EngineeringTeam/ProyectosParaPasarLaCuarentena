@@ -60,6 +60,15 @@ class MusicPlayer():
 
         return song_filename
 
+    def list_downloaded_songs(self):
+        entries = os.scandir("songs/")
+        songs = []
+        for entry in entries:
+            if entry.is_file():
+                songs.append(entry.name)
+
+        return songs
+
     def play(self, voice_channel, song_filename, volume):
         if voice_channel.is_playing() or voice_channel.is_paused():
             voice_channel.stop()

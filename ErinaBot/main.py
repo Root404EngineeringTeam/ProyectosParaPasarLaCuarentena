@@ -24,7 +24,7 @@ async def on_message(message):
     context = ErinaBot.conversation.get_context(message.channel)
     answer = ErinaBot.conversation.recognize(message.content)
 
-    regex = re.search(r'\"(.+)\"', message.content)
+    regex = re.search(r'\"(.+)\"', message.clean_content)
     if (answer == "yt_search" and not context) or (regex and context == "yt_search"):
         ErinaBot.conversation.set_context(message.channel, 'yt_search')
 
@@ -49,17 +49,20 @@ async def on_message(message):
         ErinaBot.conversation.set_context(message.channel, 'play_music')
         return
 
-    regex1 = re.search(r'\"(.+)\"', message.content)
+    regex1 = re.search(r'\"(.+)\"', message.clean_content)
     regex2 = re.search(
         r'(https?://)?(www\.)?'
         '(youtube|youtu|youtube-nocookie)\.(com|be)/'
-        '(watch\?v=|embed/|v/|.+\?v=)?([^&=%\?]{11})', message.content)
-    regex3 = re.search(r'(el|la)\s+([0-9])', message.content)
+        '(watch\?v=|embed/|v/|.+\?v=)?([^&=%\?]{11})', message.clean_content)
+    regex3 = re.search(r'(el|la)\s+([0-9]+)', message.clean_content)
 
     if (answer == "play_music" and not context) or ((regex1 or regex2) and context == "play_music") or regex3:
         ErinaBot.conversation.set_context(message.channel, 'play_music')
 
         voice_channel = await ErinaBot.music.get_voice_channel(client, message.author)
+
+        url = ''
+        song_filename = ''
 
         if not voice_channel:
             await message.channel.send("Conectate a un canal de voz y ahi la pongo :rolling_eyes:")
@@ -81,24 +84,31 @@ async def on_message(message):
         elif regex3:
             index = int(regex3.group(2))
             videos = ErinaBot.conversation.get_context_var(message.channel, "yt_search_result")
+            songs = ErinaBot.conversation.get_context_var(message.channel, "songs_list")
 
-            if not videos:
+            if videos:
+                url = videos[index]['url']
+                await message.channel.send("A la orden mi cap! :sunglasses:")
+
+            elif songs:
+                song_filename = "songs/%s" %(songs[index])
+                await message.channel.send("Okas Bv")
+
+            else:
                 await message.channel.send("Debo buscar canciones primero :thinking:")
                 return
-
-            url = videos[index]['url']
-            await message.channel.send("A la orden mi cap! :sunglasses:")
-
         else:
             await message.channel.send("Que cancion quieres?")
             return
 
-        if not url:
+        if url:
+            song_filename = ErinaBot.music.download_yt_video(url)
+
+        if not song_filename:
             ErinaBot.conversation.clear_context(message.channel)
             await message.channel.send("Los siento no pude encontrarla :C intenta de nuevo")
             return
 
-        song_filename = ErinaBot.music.download_yt_video(url)
         volume = ErinaBot.conversation.get_context_var(message.channel, "player_volume")
 
         if not volume:
@@ -109,8 +119,21 @@ async def on_message(message):
         ErinaBot.conversation.clear_context(message.channel)
         return
 
-    regex = re.search(r'(en|de)\s+(\w+)', message.content)
+    if (answer == "list_downloaded_songs" and not context):
+        songs = ErinaBot.music.list_downloaded_songs()
 
+        string = "```"
+
+        for i in range(len(songs)):
+            song = songs[i]
+            string += "%s: %s\n" %(i, song)
+
+        await message.channel.send(string + "```")
+
+        ErinaBot.conversation.set_context_var(message.channel, "songs_list", songs)
+        return
+
+    regex = re.search(r'(en|de)\s+(\w+)', message.clean_content)
     if (answer == "covid" and not context) or (regex and context == "covid"):
         ErinaBot.conversation.set_context(message.channel, 'covid')
 
@@ -127,7 +150,7 @@ async def on_message(message):
         await message.channel.send(ErinaBot.utils.covid_cases(country))
         return
 
-    regex = re.search(r'(de)\s+(\w+)', message.content)
+    regex = re.search(r'(de)\s+(\w+)', message.clean_content)
     if (answer == "send_nudes" and not context) or (("tuyo" in message.content or regex) and context == "send_nudes"):
         ErinaBot.conversation.set_context(message.channel, 'send_nudes')
 
@@ -146,8 +169,8 @@ async def on_message(message):
         await message.channel.send(":smiling_imp:")
         return
 
-    regex1 = re.search(r'\"(.+)\"', message.content)
-    regex2 = re.search(r'(en)\s+([0-9]+)\s+(minuto|hora|dia)', message.content)
+    regex1 = re.search(r'\"(.+)\"', message.clean_content)
+    regex2 = re.search(r'(en)\s+([0-9]+)\s+(minuto|hora|dia)', message.clean_content)
     if (answer == "reminder" and not context) or ((regex1 or regex2) and context == "reminder"):
         ErinaBot.conversation.set_context(message.channel, 'reminder')
 
@@ -251,12 +274,16 @@ async def on_message(message):
 
         return
 
-    regex = re.search(r'([0-9]+)', message.content)
+    regex = re.search(r'([0-9]+)', message.clean_content)
     if (answer == "volume" and not context):
         voice_channel = await ErinaBot.music.get_voice_channel(client, message.author)
 
         if not voice_channel:
             await message.channel.send("No estoy conectada a ningun canal de voz :rolling_eyes:")
+            return
+
+        if not voice_channel.source:
+            await message.channel.send("No se esta reproduciendo nada :rolling_eyes:")
             return
 
         if "baja" in message.content:
