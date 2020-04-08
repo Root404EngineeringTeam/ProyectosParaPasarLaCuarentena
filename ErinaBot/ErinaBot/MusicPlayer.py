@@ -2,15 +2,55 @@ import os
 import hashlib
 import discord
 import youtube_dl
+import asyncio
 
+from async_timeout import timeout
 from requests import get
 from bs4 import BeautifulSoup
+
+
+class MusicQueue():
+
+    def __init__(self, channel, loop):
+        self.queue = asyncio.Queue(maxsize=10)
+        self.next = asyncio.Event()
+
+        self.channel = channel
+        self.loop = loop
+
+        self.task = self.loop.create_task(self.queue_worker())
+        self.active = True
+
+    def destroy(self):
+        self.active = False
+        self.task.cancel()
+
+    async def queue_worker(self):
+        while self.active:
+            self.next.clear()
+
+            try:
+                async with timeout(300):
+                    source = await self.queue.get()
+
+            except asyncio.TimeoutError:
+                self.destroy()
+
+            if not self.channel.is_connected():
+                self.destroy()
+
+            self.channel.play(source, after=lambda _: self.loop.call_soon_threadsafe(self.next.set))
+            self.channel.is_playing()
+
+            await self.next.wait()
+
+            source.cleanup()
 
 
 class MusicPlayer():
 
     def __init__(self):
-        pass
+        self.queues = {}
 
     async def get_voice_channel(self, client, author):
         voice_channel = discord.utils.get(client.voice_clients, guild=author.guild)
@@ -69,13 +109,18 @@ class MusicPlayer():
 
         return songs
 
-    def play(self, voice_channel, song_filename, volume):
-        if voice_channel.is_playing() or voice_channel.is_paused():
-            voice_channel.stop()
+    def play(self, voice_channel, song_filename, volume, loop):
+        queue = None
+
+        if voice_channel.guild.id in self.queues.keys():
+            queue = self.queues[voice_channel.guild.id]
+
+        if not queue or not queue.active:
+            queue = MusicQueue(voice_channel, loop)
+            self.queues[voice_channel.guild.id] = queue
 
         source = discord.FFmpegPCMAudio(song_filename)
         source = discord.PCMVolumeTransformer(source)
         source.volume = volume
 
-        voice_channel.play(source)
-        voice_channel.is_playing()
+        queue.queue.put_nowait(source)

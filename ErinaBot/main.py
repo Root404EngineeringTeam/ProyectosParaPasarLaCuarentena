@@ -18,7 +18,7 @@ async def on_message(message):
     if message.author == client.user:
         return
 
-    if (not client.user in message.mentions) and (not message.mention_everyone):
+    if (not client.user in message.mentions) and (not message.mention_everyone) and (not "eri" in message.content):
         return
 
     context = ErinaBot.conversation.get_context(message.channel)
@@ -114,9 +114,10 @@ async def on_message(message):
         if not volume:
             volume = 1
 
-        ErinaBot.music.play(voice_channel, song_filename, volume)
-
+        ErinaBot.music.play(voice_channel, song_filename, volume, client.loop)
         ErinaBot.conversation.clear_context(message.channel)
+
+        await message.channel.send("Agregada a la playlist :sunglasses:")
         return
 
     if (answer == "list_downloaded_songs" and not context):
@@ -241,6 +242,22 @@ async def on_message(message):
         if voice_channel.is_playing():
             await message.channel.send("Musica en pausa  :'c :mute:")
             voice_channel.pause()
+
+        else:
+            await message.channel.send("No se esta reproduciendo nada :thinking:")
+
+        return
+
+    if (answer == "skip_song" and not context):
+        voice_channel = await ErinaBot.music.get_voice_channel(client, message.author)
+
+        if not voice_channel:
+            await message.channel.send("No estoy conectada a ningun canal de voz :rolling_eyes:")
+            return
+
+        if voice_channel.is_playing():
+            await message.channel.send("Siguiente cancion :robot:")
+            voice_channel.stop()
 
         else:
             await message.channel.send("No se esta reproduciendo nada :thinking:")
