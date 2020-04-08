@@ -18,7 +18,7 @@ Ideas para diversos proyectos (de preferencia no muy grandes y/o complejos) para
 - [ ] Speech to text en python para implementarlo en los bots
 - [ ] Cifrado de imagenes con python
 - [ ] VoIP con Rust
-- [ ] Utilidad de terminal para descargar toda la media (archivos) de un hilo en 4chan
+- [ ] Utilidad de terminal para descargar toda la media (archivos) de un hilo en 4chan ([@Algoru](https://github.com/Algoru))
     - [ ] Filtrar por tipo de archivo (webm, gif, png, etc).
     - [ ] Establecer límite de archivos (solo descarga archivos que pesen más que o menos que).
     - [ ] Establer offset y limit (cuántos archivos omitir y cuántos se quiere descargar).
