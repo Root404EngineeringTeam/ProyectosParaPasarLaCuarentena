@@ -3,6 +3,7 @@ import hashlib
 import discord
 import youtube_dl
 import asyncio
+import itertools
 
 from async_timeout import timeout
 from requests import get
@@ -11,17 +12,19 @@ from bs4 import BeautifulSoup
 
 class MusicQueue():
 
-    def __init__(self, channel, loop):
+    def __init__(self, text_channel, channel, loop):
         self.queue = asyncio.Queue(maxsize=10)
         self.next = asyncio.Event()
 
+        self.text_channel = text_channel
         self.channel = channel
         self.loop = loop
 
         self.task = self.loop.create_task(self.queue_worker())
         self.active = True
+        self.volume = 1
 
-    def destroy(self):
+    async def destroy(self):
         self.active = False
         self.task.cancel()
 
@@ -31,20 +34,30 @@ class MusicQueue():
 
             try:
                 async with timeout(300):
-                    source = await self.queue.get()
+                    element = await self.queue.get()
 
             except asyncio.TimeoutError:
-                self.destroy()
+                await self.text_channel.send("Nadie esta escuchando musica, salgo del canal de voz :pleading_face:")
+                await self.destroy()
 
             if not self.channel.is_connected():
-                self.destroy()
+                await self.destroy()
 
-            self.channel.play(source, after=lambda _: self.loop.call_soon_threadsafe(self.next.set))
-            self.channel.is_playing()
+            else:
 
-            await self.next.wait()
+                embed = discord.Embed(title=":headphones: Ahora suena", description=element["name"])
+                await self.text_channel.send(embed=embed)
 
-            source.cleanup()
+                source = element["source"]
+
+                source.volume = self.volume
+
+                self.channel.play(source, after=lambda _: self.loop.call_soon_threadsafe(self.next.set))
+                self.channel.is_playing()
+
+                await self.next.wait()
+
+                source.cleanup()
 
 
 class MusicPlayer():
@@ -62,6 +75,45 @@ class MusicPlayer():
             voice_channel = await author.voice.channel.connect()
 
         return voice_channel
+
+    def get_queue(self, text_channel, voice_channel, loop):
+        queue = None
+
+        if voice_channel.guild.id in self.queues.keys():
+            queue = self.queues[voice_channel.guild.id]
+
+        if not queue or not queue.active:
+            queue = MusicQueue(text_channel, voice_channel, loop)
+            self.queues[voice_channel.guild.id] = queue
+
+        return queue
+
+    def remove_queue(self, voice_channel):
+        if voice_channel.guild.id in self.queues.keys():
+            del self.queues[voice_channel.guild.id]
+
+    def set_volume(self, voice_channel, volume):
+        if voice_channel.guild.id in self.queues.keys():
+            queue = self.queues[voice_channel.guild.id]
+
+        else:
+            return
+
+        queue.volume = volume
+        voice_channel.source.volume = volume
+
+    def get_queue_info(self, voice_channel):
+        if voice_channel.guild.id in self.queues.keys():
+            queue = self.queues[voice_channel.guild.id]
+
+        else:
+            return None
+
+        if queue.queue.empty():
+            return None
+
+        upcoming = list(itertools.islice(queue.queue._queue, 0, 5))
+        return upcoming
 
     def search_yt_video(self, query):
         response = get("https://www.youtube.com/results?search_query=%s" %(query))
@@ -109,18 +161,13 @@ class MusicPlayer():
 
         return songs
 
-    def play(self, voice_channel, song_filename, volume, loop):
-        queue = None
-
-        if voice_channel.guild.id in self.queues.keys():
-            queue = self.queues[voice_channel.guild.id]
-
-        if not queue or not queue.active:
-            queue = MusicQueue(voice_channel, loop)
-            self.queues[voice_channel.guild.id] = queue
+    def play(self, text_channel, voice_channel, song_filename, loop):
+        queue = self.get_queue(text_channel, voice_channel, loop)
 
         source = discord.FFmpegPCMAudio(song_filename)
         source = discord.PCMVolumeTransformer(source)
-        source.volume = volume
 
-        queue.queue.put_nowait(source)
+        name = song_filename.replace("songs/","")
+        name = name.replace(".mp3","")
+
+        queue.queue.put_nowait({"source":source, "name":name})

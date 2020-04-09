@@ -24,7 +24,7 @@ def covid_cases(search):
                 serious = cells[6]
                 recovered = cells[7]
 
-                if country.lower() == search.lower():
+                if country.lower() == unidecode.unidecode(search.lower()):
                     return "Casos de Covid-19 en **%s** : %s confirmados %s muertes %s graves %s recuperados\n" % (country, confirmed, deaths, serious, recovered)
 
         except Exception as e:
