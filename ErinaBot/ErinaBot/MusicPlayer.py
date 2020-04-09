@@ -125,11 +125,16 @@ class MusicPlayer():
             url = 'https://www.youtube.com' + vid['href']
             name = vid['title']
 
-            videos.append({'url':url, 'name':name})
+            if not "user" in url and not "channel" in url and not "playlist" in url:
+                print(url)
+                videos.append({'url':url, 'name':name})
 
         return videos
 
     def download_yt_video(self, url):
+        if "user" in url or "channel" in url or "playlist" in url:
+            return ''
+
         response = get(url)
         soup = BeautifulSoup(response.text, 'lxml')
         song_filename = soup.find("meta", attrs={'property':'og:title'})['content']

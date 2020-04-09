@@ -78,7 +78,14 @@ async def on_message(message):
                 if "tusa" in message.content:
                     await message.channel.send("Weyyy nooooo! la cancion! :sob::ok_hand::ok_hand::ok_hand:")
 
-                url = ErinaBot.music.search_yt_video(regex1.group(1))[0]['url']
+                search = ErinaBot.music.search_yt_video(regex1.group(1))
+
+                if len(search) == 0:
+                    await message.channel.send("Lo siento no pude encontrar tu rolita :C")
+                    ErinaBot.conversation.clear_context(message.channel)
+                    return
+
+                url = search[0]['url']
 
             elif regex3:
                 index = int(regex3.group(2))
