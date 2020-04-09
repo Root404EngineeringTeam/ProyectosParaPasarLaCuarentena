@@ -126,7 +126,6 @@ class MusicPlayer():
             name = vid['title']
 
             if not "user" in url and not "channel" in url and not "playlist" in url:
-                print(url)
                 videos.append({'url':url, 'name':name})
 
         return videos

@@ -18,7 +18,7 @@ async def on_message(message):
     if message.author == client.user:
         return
 
-    if (not client.user in message.mentions) and (not message.mention_everyone) and (not "eri" in message.content):
+    if (not client.user in message.mentions) and (not message.mention_everyone) and (not ErinaBot.conversation.talking_to_me(message.content)):
         return
 
     async with message.channel.typing():

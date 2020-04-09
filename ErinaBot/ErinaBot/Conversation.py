@@ -58,9 +58,20 @@ class Conversation():
         text = unidecode.unidecode(text)
         text = re.sub(r'\"(.+)\"', "", text)
         text = re.sub(r'([0-9]+)', "", text)
+        text = re.sub(r'(^e+r+i+\s+)|(\s+e+r+i+$)|(\s+e+r+i+\s+)', "", text)
         text = ''.join([word for word in text if word not in string.punctuation])
 
         return text
+
+    def talking_to_me(self, text):
+        text = text.lower()
+
+        regex = re.search(r'(^e+r+i+\s+)|(\s+e+r+i+$)|(\s+e+r+i+\s+)', text)
+
+        if regex:
+            return True
+
+        return False
 
     def recognize(self, text):
         min_distance = 9999
