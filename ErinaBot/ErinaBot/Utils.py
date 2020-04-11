@@ -1,3 +1,4 @@
+import csv
 import random
 import unidecode
 
@@ -44,7 +45,7 @@ def get_nudes(topic):
     except:
         return "No encontre ninguno de %s :c" %(topic)
 
-    return post['file_url']
+    return post['file_url'], post['preview_url']
 
 def get_meme():
     n = random.randint(1, 200)

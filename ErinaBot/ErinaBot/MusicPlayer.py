@@ -1,9 +1,11 @@
 import os
+import re
 import hashlib
 import discord
 import youtube_dl
 import asyncio
 import itertools
+import unidecode
 
 from async_timeout import timeout
 from requests import get
@@ -25,6 +27,7 @@ class MusicQueue():
         self.volume = 1
 
     async def destroy(self):
+        await self.channel.disconnect()
         self.active = False
         self.task.cancel()
 
@@ -33,37 +36,42 @@ class MusicQueue():
             self.next.clear()
 
             try:
-                async with timeout(300):
+                async with timeout(180):
                     element = await self.queue.get()
 
             except asyncio.TimeoutError:
                 await self.text_channel.send("Nadie esta escuchando musica, salgo del canal de voz :pleading_face:")
                 await self.destroy()
+                continue
 
             if not self.channel.is_connected():
                 await self.destroy()
+                continue
 
-            else:
+            embed = (discord.Embed(title=":headphones: Ahora suena", description=element["name"], color=discord.Color.purple())
+                    .set_thumbnail(url=element['thumbnail'])
+                    .add_field(name="Requested By", value=element['requested_by'])
+                    .add_field(name="Enlaces", value="[YouTube](%s)" %(element['url'])))
 
-                embed = discord.Embed(title=":headphones: Ahora suena", description=element["name"])
-                await self.text_channel.send(embed=embed)
+            await self.text_channel.send(embed=embed)
 
-                source = element["source"]
+            source = element["source"]
 
-                source.volume = self.volume
+            source.volume = self.volume
 
-                self.channel.play(source, after=lambda _: self.loop.call_soon_threadsafe(self.next.set))
-                self.channel.is_playing()
+            self.channel.play(source, after=lambda _: self.loop.call_soon_threadsafe(self.next.set))
+            self.channel.is_playing()
 
-                await self.next.wait()
+            await self.next.wait()
 
-                source.cleanup()
+            source.cleanup()
 
 
 class MusicPlayer():
 
     def __init__(self):
         self.queues = {}
+
 
     async def get_voice_channel(self, client, author):
         voice_channel = discord.utils.get(client.voice_clients, guild=author.guild)
@@ -132,15 +140,16 @@ class MusicPlayer():
 
     def download_yt_video(self, url):
         if "user" in url or "channel" in url or "playlist" in url:
-            return ''
+            return False, False, False
 
         response = get(url)
         soup = BeautifulSoup(response.text, 'lxml')
         song_filename = soup.find("meta", attrs={'property':'og:title'})['content']
-        song_filename = "songs/%s.mp3" %(song_filename)
+        song_thumbnail = soup.find("meta", attrs={'property':'og:image'})['content']
 
-        if not os.path.exists(song_filename):
+        song_path = "songs/%s.mp3" %(song_filename)
 
+        if not os.path.exists(song_path):
             ydl_opts = {
                 'format': 'bestaudio/best',
                 'postprocessors': [{
@@ -148,13 +157,16 @@ class MusicPlayer():
                     'preferredcodec': 'mp3',
                     'preferredquality': '192',
                 }],
-                'outtmpl': song_filename
+                'outtmpl': 'songs/' + song_filename + '.%(ext)s'
             }
 
             with youtube_dl.YoutubeDL(ydl_opts) as ydl:
                 ydl.download([url])
 
-        return song_filename
+        if not os.path.exists(song_path):
+            return False, False, False
+
+        return song_path, song_filename, song_thumbnail
 
     def list_downloaded_songs(self):
         entries = os.scandir("songs/")
@@ -165,13 +177,18 @@ class MusicPlayer():
 
         return songs
 
-    def play(self, text_channel, voice_channel, song_filename, loop):
+    def play(self, text_channel, voice_channel, path, loop, metadata):
         queue = self.get_queue(text_channel, voice_channel, loop)
 
-        source = discord.FFmpegPCMAudio(song_filename)
+        source = discord.FFmpegPCMAudio(path)
         source = discord.PCMVolumeTransformer(source)
 
-        name = song_filename.replace("songs/","")
-        name = name.replace(".mp3","")
+        song = {
+            "source": source,
+            "name": metadata['name'],
+            "thumbnail": metadata['thumbnail'],
+            "url": metadata['url'],
+            "requested_by": metadata['requested_by']
+        }
 
-        queue.queue.put_nowait({"source":source, "name":name})
+        queue.queue.put_nowait(song)
