@@ -390,7 +390,7 @@ async def create_reminder(ctx, args):
 
     expiration = args.number
 
-    if "dia" in unidecode.unidecode(ctx.clean_content):
+    if "dia" in unidecode(ctx.clean_content):
         expiration = expiration * 24 * 60 * 60
         type = "días"
 
