@@ -33,8 +33,8 @@ def covid_cases(search):
 
     return "Lo siento no pude obtener los datos en este momento :( meper donas?"
 
-def get_nudes(topic):
-    response = get("https://rule34.xxx/index.php/index.php?page=dapi&s=post&q=index&tags=%s&limit=50&pid=%s" %(topic, random.randrange(0,88)))
+def get_nudes():
+    response = get("https://rule34.xxx/index.php/index.php?page=dapi&s=post&q=index&tags=Nier&limit=50&pid=%s" %(random.randrange(0,88)))
 
     soup = BeautifulSoup(response.text, 'lxml')
     posts = soup.find_all("post")

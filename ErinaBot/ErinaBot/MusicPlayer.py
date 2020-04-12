@@ -37,7 +37,7 @@ class MusicQueue():
 
             try:
                 async with timeout(180):
-                    element = await self.queue.get()
+                    song = await self.queue.get()
 
             except asyncio.TimeoutError:
                 await self.text_channel.send("Nadie esta escuchando musica, salgo del canal de voz :pleading_face:")
@@ -48,14 +48,15 @@ class MusicQueue():
                 await self.destroy()
                 continue
 
-            embed = (discord.Embed(title=":headphones: Ahora suena", description=element["name"], color=discord.Color.purple())
-                    .set_thumbnail(url=element['thumbnail'])
-                    .add_field(name="Requested By", value=element['requested_by'])
-                    .add_field(name="Enlaces", value="[YouTube](%s)" %(element['url'])))
+            source = song['source']
+            metadata = song['metadata']
+
+            embed = (discord.Embed(title=":headphones: Ahora suena", description=metadata["title"], color=discord.Color.purple())
+                    .set_thumbnail(url=metadata['thumbnail'])
+                    .add_field(name="Requested By", value=metadata['requested_by'])
+                    .add_field(name="Enlaces", value="[YouTube](%s)" %(metadata['url'])))
 
             await self.text_channel.send(embed=embed)
-
-            source = element["source"]
 
             source.volume = self.volume
 
@@ -144,10 +145,10 @@ class MusicPlayer():
 
         response = get(url)
         soup = BeautifulSoup(response.text, 'lxml')
-        song_filename = soup.find("meta", attrs={'property':'og:title'})['content']
+        song_title = soup.find("meta", attrs={'property':'og:title'})['content']
         song_thumbnail = soup.find("meta", attrs={'property':'og:image'})['content']
 
-        song_path = "songs/%s.mp3" %(song_filename)
+        song_path = "songs/%s.mp3" %(song_title)
 
         if not os.path.exists(song_path):
             ydl_opts = {
@@ -157,7 +158,7 @@ class MusicPlayer():
                     'preferredcodec': 'mp3',
                     'preferredquality': '192',
                 }],
-                'outtmpl': 'songs/' + song_filename + '.%(ext)s'
+                'outtmpl': 'songs/' + song_title + '.%(ext)s'
             }
 
             with youtube_dl.YoutubeDL(ydl_opts) as ydl:
@@ -166,7 +167,7 @@ class MusicPlayer():
         if not os.path.exists(song_path):
             return False, False, False
 
-        return song_path, song_filename, song_thumbnail
+        return song_path, song_title, song_thumbnail
 
     def list_downloaded_songs(self):
         entries = os.scandir("songs/")
@@ -177,18 +178,15 @@ class MusicPlayer():
 
         return songs
 
-    def play(self, text_channel, voice_channel, path, loop, metadata):
-        queue = self.get_queue(text_channel, voice_channel, loop)
+    def play(self, client, ctx, voice_channel, metadata):
+        queue = self.get_queue(ctx.channel, voice_channel, client.loop)
 
-        source = discord.FFmpegPCMAudio(path)
+        source = discord.FFmpegPCMAudio(metadata['path'])
         source = discord.PCMVolumeTransformer(source)
 
         song = {
             "source": source,
-            "name": metadata['name'],
-            "thumbnail": metadata['thumbnail'],
-            "url": metadata['url'],
-            "requested_by": metadata['requested_by']
+            "metadata": metadata
         }
 
         queue.queue.put_nowait(song)

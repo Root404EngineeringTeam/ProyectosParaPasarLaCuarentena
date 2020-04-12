@@ -1,5 +1,6 @@
 from __future__ import unicode_literals
 from datetime import datetime
+from unidecode import unidecode
 
 from discord.ext import tasks
 
@@ -7,12 +8,459 @@ import ErinaBot
 import discord
 import time
 import os
-import re
 
 client = discord.Client()
 
+@ErinaBot.intention
+async def help(ctx, args):
+    '''
+        **Hola, mi nombre es Erina!**
+
+        Solo soy un robot y no se hacer muchas cosas :robot: pero trataré de hacerlo lo mejor que pueda.
+
+        No entiendo del todo el lenguaje de los humanos, pero puedes tratar de hablarme de forma natural. :sweat_smile:
+
+        Aquí algunas del las cosas que se hacer:
+    '''
+    pass
+
+@ErinaBot.intention
+async def list_downloaded_songs(ctx, message):
+    '''
+        **Listar las canciones descargadas**
+
+        Para listar las canciones que he descargado simplemente di algo como:
+
+        :black_small_square: ¿Eri qué canciones has descargado?
+        :black_small_square: Eri lista de canciones descargadas
+
+        De la lista que aparezca puedes pedir una canción:
+
+        :black_small_square: Eri pon la 3
+        :black_small_square: quiero escuchar la 5 eri
+    '''
+    songs = ErinaBot.music.list_downloaded_songs()
+
+    string = "".join("**%s** - %s\n" %(i, songs[i]) for i in range(len(songs)))
+
+    embed = discord.Embed(title="%i Canciones descargadas" %(len(songs)),
+                            description=string,
+                            color=discord.Color.purple())
+
+    await ctx.channel.send(embed=embed)
+
+    ErinaBot.conversation.set_context_var(ctx, "downloaded_songs", songs)
+    ErinaBot.conversation.set_context_var(ctx, "yt_search_result", '')
+
+@ErinaBot.intention
+async def yt_search(ctx, args):
+    '''
+        **Buscar canciones**
+
+        Para buscar canciones dime algo así:
+
+        :black_small_square: Eri busca "Ghost - Rats"
+        :black_small_square: Eri busca esta cancion "Tusa"
+        :black_small_square: Eri busca canciones de "Metallica"
+
+        Se desplegara una lista numerada, para poner una cancion puedes decir:
+
+        :black_small_square: Eri quiero escuchar la numero 4
+        :black_small_square: Eri pon la 2
+        :black_small_square: Eri agrega la 3
+    '''
+    if not args.string:
+        await ctx.channel.send("¿Qué busco? :thinking:")
+        return
+
+    await ctx.channel.send("Buscando **%s** :face_with_monocle:" %(args.string))
+
+    async with ctx.channel.typing():
+        videos = ErinaBot.music.search_yt_video(args.string)
+
+    if len(videos) == 0:
+        await ctx.channel.send("Lo siento tuve problmeas con la busqueda :sweat_smile:")
+        return
+
+    ErinaBot.conversation.set_context_var(ctx, "yt_search_result", videos)
+
+    string = "".join("%i.- [%s](%s)\n" %(i, videos[i]['name'], videos[i]['url']) for i in range(len(videos)))
+    embed =  discord.Embed(title=args.string, description=string, color=discord.Color.purple())
+
+    await ctx.channel.send(embed=embed)
+
+@ErinaBot.intention
+async def play_music(ctx, args):
+    '''
+        **Poner música**
+
+        Si quieres escuchar una canción solo dime:
+
+        :black_small_square: Eri pon "Metallica - One"
+        :black_small_square: Eri quiero escuchar "Ghost Monstrance Clock"
+
+        O algo así. Solo recuerda poner el nombre de la canción entre comillas.
+
+        Trata de ser especifico ya que pondré el primer resultado que encuentre en youtube. :sweat_smile:
+
+        También puedes simplemente indicarme el enlace a YouTube:
+
+        :black_small_square: Eri reproduce http://youtube.com/...
+    '''
+    voice_channel = await ErinaBot.music.get_voice_channel(client, ctx.author)
+
+    if not voice_channel:
+        await ctx.channel.send("Conectate a un canal de voz :rolling_eyes:")
+        return
+
+    video_url = None
+    song_path = None
+    song_metadata = None
+
+    if args.yt_url:
+        video_url = args.yt_url
+
+    elif args.string:
+        if "tusa" in args.string:
+            await ctx.channel.send("Weyyy nooooo! la cancion! :sob::ok_hand::ok_hand::ok_hand:")
+
+        async with ctx.channel.typing():
+            search_results = ErinaBot.music.search_yt_video(args.string)
+
+        if len(search_results) == 0:
+            await ctx.channel.send("Lo siento no pude encontrar tu rolita :C")
+            return
+
+        video_url = search_results[0]['url']
+
+    elif args.number != None:
+        videos = ErinaBot.conversation.get_context_var(ctx, "yt_search_result")
+        songs = ErinaBot.conversation.get_context_var(ctx, "downloaded_songs")
+
+        if videos:
+            video_url = videos[args.number]['url']
+
+        elif songs:
+            song_path = "songs/%s" %(songs[args.number])
+
+        else:
+            await ctx.channel.send("Primero realiza una busqueda :thinking:")
+            return
+
+    else:
+        await ctx.channel.send("¿Qué canción quieres?")
+        return
+
+    if video_url:
+        async with ctx.channel.typing():
+            await ctx.channel.send("Dame un segundo, necesito descargarla...")
+            song_path, song_title, song_thumbnail = ErinaBot.music.download_yt_video(video_url)
+
+            song_metadata = {
+                "path": song_path,
+                "title": song_title,
+                "thumbnail": song_thumbnail,
+                "url": video_url,
+                "requested_by": ctx.author.mention
+            }
+
+            ErinaBot.db.songs.insert_one(song_metadata)
+
+    if not song_path:
+        await ctx.add_reaction("😢")
+        await ctx.channel.send("Los siento no pude encontrarla :C")
+        return
+
+    if not song_metadata:
+        song_metadata = ErinaBot.db.songs.find_one({"path": song_path})
+
+    ErinaBot.music.play(client, ctx, voice_channel, song_metadata)
+
+    await ctx.channel.send("Agregada a la playlist :sunglasses:")
+
+    queue_info = ErinaBot.music.get_queue_info(voice_channel)
+
+    if not queue_info:
+        return
+
+    string = "".join(":black_small_square: %s\n" %(song["metadata"]["title"]) for song in queue_info)
+
+    embed = discord.Embed(title="%i canciones en la playlist" %(len(queue_info)),
+                            description=string,
+                            color=discord.Color.purple())
+
+    await ctx.channel.send(embed=embed)
+
+@ErinaBot.intention
+async def pause_music(ctx, args):
+    '''
+        **Pausar música**
+
+        Si estás escuchando música y quieres que ponga pausa solo di algo como:
+
+        :black_small_square: Pausa la musica eri
+        :black_small_square: Eri pausar música
+    '''
+    voice_channel = await ErinaBot.music.get_voice_channel(client, ctx.author)
+
+    if not voice_channel:
+        await ctx.channel.send("No estoy conectada a ningun canal de voz :rolling_eyes:")
+        return
+
+    if not voice_channel.is_playing():
+        await ctx.channel.send("No se esta reproduciendo nada :thinking:")
+        return
+
+    await ctx.add_reaction("⏸")
+    voice_channel.pause()
+
+@ErinaBot.intention
+async def resume_music(ctx, args):
+    '''
+        **Quitar pausa**
+
+        Si pausaste la música y quieres reanudar la reproducción di:
+
+        :black_small_square: Eri play
+        :black_small_square: Eri quita la pausa
+        :black_small_square: ponle play eri
+    '''
+    voice_channel = await ErinaBot.music.get_voice_channel(client, ctx.author)
+
+    if not voice_channel:
+        await ctx.channel.send("No estoy conectada a ningun canal de voz :rolling_eyes:")
+        return
+
+    if not voice_channel.is_paused():
+        await ctx.channel.send("No música en pausa :thinking:")
+        return
+
+    await ctx.add_reaction("▶️")
+    await ctx.channel.send("Fierro :cowboy: :ok_hand:")
+    voice_channel.resume()
+
+@ErinaBot.intention
+async def skip_song(ctx, args):
+    '''
+        **Saltar canción**
+
+        Si tienes más de una canción en lista puedes pedirme que la adelante:
+
+        :black_small_square: adelanta la cancion eri
+        :black_small_square: Eri siguiente canción
+    '''
+    voice_channel = await ErinaBot.music.get_voice_channel(client, ctx.author)
+
+    if not voice_channel:
+        await ctx.channel.send("No estoy conectada a ningun canal de voz :rolling_eyes:")
+        return
+
+    if not voice_channel.is_playing():
+        await ctx.channel.send("No se esta reproduciendo nada :thinking:")
+        return
+
+    await ctx.add_reaction("⏭")
+    voice_channel.stop()
+
+@ErinaBot.intention
+async def set_player_volume(ctx, args):
+    '''
+        **Cambiar volumen de la música**
+
+        Si el volumen esta muy alto o muy bajo, pide que lo ajuste:
+
+        :black_small_square: Eri volumen al 50
+        :black_small_square: pon el volumen al 10 eri
+    '''
+    voice_channel = await ErinaBot.music.get_voice_channel(client, ctx.author)
+
+    if not voice_channel:
+        await ctx.channel.send("No estoy conectada a ningun canal de voz :rolling_eyes:")
+        return
+
+    if not voice_channel.source:
+        await ctx.channel.send("No se esta reproduciendo nada :rolling_eyes:")
+        return
+
+    if not args.number:
+        await ctx.channel.send("¿En cuánto pongo el volumen?")
+        return
+
+    volume = args.number / 100
+
+    if volume < 0:
+        volume = 0
+
+    elif volume > 1:
+        volume = 1
+
+    ErinaBot.music.set_volume(voice_channel, volume)
+    await ctx.channel.send("Volumen: **%i** :loud_sound:" %(args.number))
+
+@ErinaBot.intention
+async def leave_voice_channel(ctx, args):
+    '''
+        **Salir del canal de voz**
+
+        Si ya no estas escuchando música o ya no quieres escucharla solo dime que deje  el canal de voz:
+
+        :black_small_square: sal de la llamada eri
+        :black_small_square: Eri abandona el canal de voz
+
+        De todas formas si nadie pide una canción en 3 minutos de que terminó la última yo saldré automaticamente. :kissing_closed_eyes:
+    '''
+    voice_channel = await ErinaBot.music.get_voice_channel(client, ctx.author)
+
+    if not voice_channel:
+        await ctx.channel.send("No estoy conectada a ningun canal de voz :rolling_eyes:")
+        return
+
+    ErinaBot.music.remove_queue(voice_channel)
+
+    await ctx.add_reaction("☹️")
+    await ctx.channel.send("Ay :c al fin que ni queria hablar con ustedes :'v :broken_heart:")
+
+    await voice_channel.disconnect()
+
+@ErinaBot.intention
+async def covid_statistics(ctx, args):
+    '''
+        **Estadisticas del COVID-19**
+
+        ¿Te interesa saber las cifras más actuales de esta pandemia para tu país?
+
+        :black_small_square: Eri ¿Cual es la situación del covid en "México"?
+
+        No olvides indicar entre comillas el nombre de tu país.
+    '''
+    if not args.string:
+        await ctx.channel.send("¿De qué país?")
+        return
+
+    await ctx.channel.send("Voy, dame un segundo...")
+
+    async with ctx.channel.typing():
+        covid_cases = ErinaBot.utils.covid_cases(args.string)
+
+    embed = discord.Embed(title="Casos de covid en %s" %(args.string),
+                            description=covid_cases,
+                            color=discord.Color.purple())
+
+    await ctx.channel.send(embed=embed)
+
+@ErinaBot.intention
+async def send_nudes(ctx, args):
+    '''
+        **Send Nudes**
+
+        Jaja ¿Es necesario que lo explique? :flushed::face_with_hand_over_mouth:
+    '''
+    await ctx.add_reaction("🤣")
+    await ctx.channel.send("Pinshi puerco... espera 7u7r")
+
+    async with ctx.channel.typing():
+        url, thumbnail = ErinaBot.utils.get_nudes()
+
+    embed = (discord.Embed(title=":smiling_imp:",
+                            description="[Ver Imagen Completa](%s)" %(url),
+                            color=discord.Color.purple())
+                            .set_image(url=thumbnail))
+
+    await ctx.channel.send(embed=embed)
+
+@ErinaBot.intention
+async def create_reminder(ctx, args):
+    '''
+        **Crear recordatorio**
+
+        ¿Quieres que te recuerde algo?
+
+        :black_small_square: Eri programa un recordatorio "Comprar leche" en 10 minutos.
+        :black_small_square: recuerdame "Hacer algo productivo" en 2 días eri
+
+        Indica el contenido del recordatorio entre comillas y en cuanto tiempo quieres que te lo recuerde, siendo el tiempo en minutos, horas o días.
+    '''
+    if not args.string:
+        await ctx.channel.send("¿Qué quieres que te recuerde?")
+        return
+
+    if not args.number:
+        await ctx.channel.send("¿En cuanto tiempo?")
+        return
+
+    expiration = args.number
+
+    if "dia" in unidecode.unidecode(ctx.clean_content):
+        expiration = expiration * 24 * 60 * 60
+        type = "días"
+
+    elif "hora" in ctx.clean_content:
+        expiration = expiration * 60 * 60
+        type = "horas"
+
+    else:
+        expiration = expiration * 60
+        type = "minutos"
+
+    creation_date = "%s %s" %(args.number, type)
+
+    expiration += time.time()
+    notification = {
+        'expiration': expiration,
+        'message': args.string,
+        'author': ctx.author.mention,
+        'channel': ctx.channel.id,
+        'creation_date': creation_date
+    }
+
+    ErinaBot.db.notifications.insert_one(notification)
+
+    await ctx.add_reaction("👍")
+    await ctx.channel.send("Vale yo te aviso :sunglasses:")
+
+    date = datetime.utcfromtimestamp(expiration-18000).strftime('%Y-%m-%d %H:%M')
+    embed = (discord.Embed(title="Recordatorio programado",
+                            description=args.string,
+                            color=discord.Color.purple())
+                            .add_field(name="Fecha", value=date)
+                            .add_field(name="Autor", value=ctx.author.mention))
+
+    await ctx.channel.send(embed=embed)
+
+@ErinaBot.intention
+async def send_meme(ctx, args):
+    '''
+        **Memes**
+
+        Puedo mandarte algunos memes, pero no garantizo que sean graciosos :sob:
+
+        :black_small_square: Eri manda un meme
+    '''
+    await ctx.channel.send("Deja busco uno que este bueno :'3 ...")
+
+    async with ctx.channel.typing():
+        await ctx.channel.send(ErinaBot.utils.get_meme())
+
+@ErinaBot.intention
+async def send_joke(ctx, args):
+    '''
+        **Chistes**
+
+        Me se algunos chistes :laughing:
+
+        :black_small_square: Cuenta un chiste eri
+    '''
+    await ctx.channel.send("Mmm ...")
+
+    async with ctx.channel.typing():
+        await ctx.channel.send(ErinaBot.utils.get_joke())
+
 @tasks.loop(seconds=30.0)
 async def cronjob():
+    '''
+        Revisa la base de datos cada 30s y si encuentra una notificacion
+        que haya expirado la envia al canal de donde la crearon.
+    '''
     notifications = ErinaBot.db.notifications.find()
     unix_time = time.time()
 
@@ -25,16 +473,18 @@ async def cronjob():
 
             author = notification['author']
             message = notification['message']
+            creation_date = notification['creation_date']
 
             embed = (discord.Embed(title="Recodatorio", description=message, color=discord.Color.purple())
-                    .add_field(name="author", value=author))
+                    .add_field(name="Hace", value=creation_date)
+                    .add_field(name="Autor", value=author))
 
             await channel.send(embed=embed)
 
 @client.event
 async def on_ready():
-    print("The bot is ready!")
-    activity = discord.Activity(type=discord.ActivityType.watching, name="H3ntai!")
+    print("Erina-san is ready!")
+    activity = discord.Activity(type=discord.ActivityType.watching, name="Hentai!")
     await client.change_presence(status=discord.Status.online, activity=activity)
 
     cronjob.start()
@@ -44,378 +494,11 @@ async def on_message(message):
     if message.author == client.user:
         return
 
-    if (not client.user in message.mentions) and (not message.mention_everyone) and (not ErinaBot.conversation.talking_to_me(message.content)):
+    if (not client.user in message.mentions)\
+        and (not message.mention_everyone)\
+        and (not ErinaBot.conversation.talking_to_me(message.content)):
         return
 
-    context = ErinaBot.conversation.get_context(message.channel)
-    answer = ErinaBot.conversation.recognize(message.content)
-
-    regex = re.search(r'\"(.+)\"', message.clean_content)
-    if (answer == "yt_search" and not context) or (regex and context == "yt_search"):
-        ErinaBot.conversation.set_context(message.channel, 'yt_search')
-
-        if not regex:
-            await message.channel.send("Que busco?")
-            return
-
-        query = regex.group(1)
-        await message.channel.send("Buscando **%s** :face_with_monocle:" %(query))
-
-        async with message.channel.typing():
-            videos = ErinaBot.music.search_yt_video(query)
-
-        string = ""
-
-        for i in range(len(videos)):
-            video = videos[i]
-            string += "**%i** - [%s](%s)\n" %(i, video['name'], video['url'])
-
-        embed =  discord.Embed(title=query, description=string, color=discord.Color.purple())
-
-        await message.channel.send(embed=embed)
-
-        ErinaBot.conversation.set_context_var(message.channel, "yt_search_result", videos)
-        ErinaBot.conversation.set_context(message.channel, 'play_music')
-        return
-
-    regex1 = re.search(r'\"(.+)\"', message.clean_content)
-    regex2 = re.search(
-        r'(https?://)?(www\.)?'
-        '(youtube|youtu|youtube-nocookie)\.(com|be)/'
-        '(watch\?v=|embed/|v/|.+\?v=)?([^&=%\?]{11})', message.clean_content)
-    regex3 = re.search(r'(el|la)\s+([0-9]+)', message.clean_content)
-
-    if (answer == "play_music" and not context) or ((regex1 or regex2) and context == "play_music") or regex3:
-        ErinaBot.conversation.set_context(message.channel, 'play_music')
-
-        voice_channel = await ErinaBot.music.get_voice_channel(client, message.author)
-
-        url = ''
-        song_filename = ''
-        song_metadata = ''
-
-        if not voice_channel:
-            await message.channel.send("Conectate a un canal de voz y ahi la pongo :rolling_eyes:")
-            ErinaBot.conversation.clear_context(message.channel)
-            return
-
-        if regex2:
-            url = "http://www.youtube.com/watch?v=%s" %(regex2.group(6))
-            await message.channel.send("Dame un segundo...")
-
-        elif regex1:
-            if "tusa" in message.content:
-                await message.channel.send("Weyyy nooooo! la cancion! :sob::ok_hand::ok_hand::ok_hand:")
-
-            async with message.channel.typing():
-                search = ErinaBot.music.search_yt_video(regex1.group(1))
-
-            if len(search) == 0:
-                await message.channel.send("Lo siento no pude encontrar tu rolita :C")
-                ErinaBot.conversation.clear_context(message.channel)
-                return
-
-            url = search[0]['url']
-
-        elif regex3:
-            index = int(regex3.group(2))
-            videos = ErinaBot.conversation.get_context_var(message.channel, "yt_search_result")
-            songs = ErinaBot.conversation.get_context_var(message.channel, "songs_list")
-
-            if videos:
-                url = videos[index]['url']
-
-            elif songs:
-                song_filename = "songs/%s" %(songs[index])
-
-            else:
-                await message.channel.send("Debo buscar canciones primero :thinking:")
-                return
-        else:
-            await message.channel.send("Que cancion quieres?")
-            return
-
-        if url:
-            async with message.channel.typing():
-                await message.channel.send("Dame un segundo, necesito descargarla...")
-                song_filename, song_title, song_thumbnail = ErinaBot.music.download_yt_video(url)
-
-                song_metadata = {
-                    "name": song_title,
-                    "path": song_filename,
-                    "thumbnail": song_thumbnail,
-                    "url": url,
-                    "requested_by": message.author.mention
-                }
-
-                ErinaBot.db.songs.insert_one(song_metadata)
-
-        if not song_filename:
-            ErinaBot.conversation.clear_context(message.channel)
-            await message.channel.send("Los siento no pude encontrarla :C intenta de nuevo")
-            return
-
-        if not song_metadata:
-            song_metadata = ErinaBot.db.songs.find_one({"path": path})
-
-        ErinaBot.music.play(message.channel, voice_channel, song_filename, client.loop, song_metadata)
-        ErinaBot.conversation.clear_context(message.channel)
-
-        await message.channel.send("Agregada a la playlist :sunglasses:")
-
-        queue_info = ErinaBot.music.get_queue_info(voice_channel)
-
-        if not queue_info:
-            return
-
-        string = ""
-        for song in queue_info:
-            string += ":black_small_square: %s\n" %(song["name"])
-
-        embed = discord.Embed(title="%i canciones en la playlist" %(len(queue_info)), description=string, color=discord.Color.purple())
-
-        await message.channel.send(embed=embed)
-        return
-
-    if (answer == "list_downloaded_songs" and not context):
-        songs = ErinaBot.music.list_downloaded_songs()
-
-        string = ""
-
-        for i in range(len(songs)):
-            song = songs[i]
-            string += "**%s** - %s\n" %(i, song)
-
-        embed = discord.Embed(title="%i Canciones descargadas" %(len(songs)), description=string, color=discord.Color.purple())
-
-        await message.channel.send(embed=embed)
-
-        ErinaBot.conversation.set_context_var(message.channel, "songs_list", songs)
-        ErinaBot.conversation.set_context_var(message.channel, "yt_search_result", '')
-        return
-
-    regex = re.search(r'(en|de)\s+(\w+)', message.clean_content)
-    if (answer == "covid" and not context) or (regex and context == "covid"):
-        ErinaBot.conversation.set_context(message.channel, 'covid')
-
-        if regex:
-            country = regex.group(2)
-
-        else:
-            await message.channel.send("De que pais?")
-            return
-
-        ErinaBot.conversation.clear_context(message.channel)
-
-        await message.channel.send("Voy, dame un segundo...")
-
-        async with message.channel.typing():
-            covid_cases = ErinaBot.utils.covid_cases(country)
-
-        embed = discord.Embed(title="Casos de covid en %s" %(country), description=covid_cases, color=discord.Color.purple())
-
-        await message.channel.send(embed=embed)
-        return
-
-    regex = re.search(r'(de)\s+(\w+)', message.clean_content)
-    if (answer == "send_nudes" and not context) or (("tuyo" in message.content or regex) and context == "send_nudes"):
-        ErinaBot.conversation.set_context(message.channel, 'send_nudes')
-
-        if regex:
-            topic = regex.group(2)
-        elif "tuyo" in message.content:
-            topic = "nier"
-        else:
-            await message.add_reaction("🤣")
-            await message.channel.send("Pinshi puerco... de quien quieres nudes? 7u7r")
-            return
-
-        ErinaBot.conversation.clear_context(message.channel)
-
-        await message.add_reaction("💜")
-        await message.channel.send("Ah prrooooo... espera 7u7r")
-
-        async with message.channel.typing():
-            url, thumbnail = ErinaBot.utils.get_nudes(topic)
-
-        embed = (discord.Embed(title=":smiling_imp:", description="[Ver Imagen Completa](%s)" %(url), color=discord.Color.purple())
-                    .set_image(url=thumbnail))
-
-        await message.channel.send(embed=embed)
-        return
-
-    regex1 = re.search(r'\"(.+)\"', message.clean_content)
-    regex2 = re.search(r'(en)\s+([0-9]+)\s+(minuto|hora|dia)', message.clean_content)
-    if (answer == "reminder" and not context) or ((regex1 or regex2) and context == "reminder"):
-        ErinaBot.conversation.set_context(message.channel, 'reminder')
-
-        value = ErinaBot.conversation.get_context_var(message.channel, 'notification_value')
-        when = ErinaBot.conversation.get_context_var(message.channel, 'notification_when')
-
-        if not regex1 and not value:
-            await message.channel.send("Que quieres que te recuerde?")
-            return
-
-        if regex1 and not value:
-            value = regex1.group(1)
-            ErinaBot.conversation.set_context_var(message.channel, 'notification_value', value)
-
-        if not regex2 and not when:
-            await message.channel.send("Para cuando?")
-            return
-
-        if regex2 and not when:
-            when = "%s %s" %(regex2.group(2), regex2.group(3))
-            ErinaBot.conversation.set_context_var(message.channel, 'notification_when', when)
-
-        ErinaBot.conversation.set_context_var(message.channel, 'notification_value', '')
-        ErinaBot.conversation.set_context_var(message.channel, 'notification_when', '')
-
-        expiration, type = when.split(" ")
-        expiration = int(expiration)
-
-        if "minuto" in type:
-            expiration = expiration * 60
-
-        elif "hora" in type:
-            expiration = expiration * 60 * 60
-
-        elif "dia" in type:
-            expiration = expiration * 24 * 60 * 60
-
-        expiration += time.time()
-        notification = {
-            'expiration': expiration,
-            'message': value,
-            'author': message.author.mention,
-            'channel': message.channel.id
-        }
-
-        ErinaBot.db.notifications.insert_one(notification)
-
-        ErinaBot.conversation.clear_context(message.channel)
-
-        await message.add_reaction("👍")
-        await message.channel.send("Vale yo te aviso :sunglasses:")
-
-        date = datetime.utcfromtimestamp(expiration-18000).strftime('%Y-%m-%d %H:%M')
-        embed = (discord.Embed(title="Recordatorio programado", description=value, color=discord.Color.purple())
-                .add_field(name="Fecha", value=date)
-                .add_field(name="Autor", value=message.author.mention))
-
-        await message.channel.send(embed=embed)
-        return
-
-    if answer == "meme" and not context:
-        await message.channel.send("Deja busco uno que este bueno :'3 ...")
-        async with message.channel.typing():
-            await message.channel.send(ErinaBot.utils.get_meme())
-        return
-
-    if answer == "joke" and not context:
-        await message.channel.send("Mmm ...")
-        async with message.channel.typing():
-            await message.channel.send(ErinaBot.utils.get_joke())
-        return
-
-    if (answer == "pause_music" and not context):
-        voice_channel = await ErinaBot.music.get_voice_channel(client, message.author)
-
-        if not voice_channel:
-            await message.channel.send("No estoy conectada a ningun canal de voz :rolling_eyes:")
-            return
-
-        if not voice_channel.is_playing():
-            await message.channel.send("No se esta reproduciendo nada :thinking:")
-            return
-
-        await message.add_reaction("⏸")
-        voice_channel.pause()
-        return
-
-    if (answer == "skip_song" and not context):
-        voice_channel = await ErinaBot.music.get_voice_channel(client, message.author)
-
-        if not voice_channel:
-            await message.channel.send("No estoy conectada a ningun canal de voz :rolling_eyes:")
-            return
-
-        if not voice_channel.is_playing():
-            await message.channel.send("No se esta reproduciendo nada :thinking:")
-            return
-
-        await message.add_reaction("⏭")
-        voice_channel.stop()
-        return
-
-    if (answer == "leave_voice_channel" and not context):
-        voice_channel = await ErinaBot.music.get_voice_channel(client, message.author)
-
-        if not voice_channel:
-            await message.channel.send("No estoy conectada a ningun canal de voz :rolling_eyes:")
-            return
-
-        ErinaBot.music.remove_queue(voice_channel)
-
-        await message.add_reaction("☹️")
-        await message.channel.send("Ay :c al fin que ni queria hablar con ustedes :'v :broken_heart:")
-        await voice_channel.disconnect()
-        return
-
-    if (answer == "resume_music" and not context):
-        voice_channel = await ErinaBot.music.get_voice_channel(client, message.author)
-
-        if not voice_channel:
-            await message.channel.send("No estoy conectada a ningun canal de voz :rolling_eyes:")
-            return
-
-        if voice_channel.is_paused():
-            await message.add_reaction("▶️")
-            await message.channel.send("Fierro :cowboy: :ok_hand:")
-            voice_channel.resume()
-
-        else:
-            await message.channel.send("No se esta reproduciendo nada :thinking:")
-
-        return
-
-    regex = re.search(r'([0-9]+)', message.clean_content)
-    if (answer == "volume" and not context):
-        voice_channel = await ErinaBot.music.get_voice_channel(client, message.author)
-
-        if not voice_channel:
-            await message.channel.send("No estoy conectada a ningun canal de voz :rolling_eyes:")
-            return
-
-        if not voice_channel.source:
-            await message.channel.send("No se esta reproduciendo nada :rolling_eyes:")
-            return
-
-        if "baja" in message.content:
-            volume = voice_channel.source.volume - 0.1
-
-        elif regex:
-            volume = int(regex.group(1)) / 100
-
-        else:
-            volume = voice_channel.source.volume + 0.1
-
-        if volume < 0:
-            volume = 0
-        elif volume > 1:
-            volume = 1
-
-        ErinaBot.music.set_volume(voice_channel, volume)
-
-        await message.channel.send("Volumen: **%i** :loud_sound:" %(volume * 100))
-        return
-
-    if answer == "clear_context":
-        ErinaBot.conversation.clear_context(message.channel)
-        await message.channel.send("Mmm bueno...")
-        return
-
-    ErinaBot.conversation.clear_context(message.channel)
-    await message.channel.send(answer)
+    await ErinaBot.conversation.recognize(message)
 
 client.run(ErinaBot.access_token)

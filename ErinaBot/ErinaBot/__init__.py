@@ -14,6 +14,7 @@ db = mongo.ErinaBot
 
 utils = Utils
 music = MusicPlayer.MusicPlayer()
+intention = Conversation.handle_intention
 conversation = Conversation.Conversation()
 
 conversation.load_dictionary("./ErinaBot/intentions.yml")
