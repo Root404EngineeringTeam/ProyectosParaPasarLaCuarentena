@@ -1,3 +1,7 @@
+ErinaBot/songs/*.mp3
+ErinaBot/ErinaBot/__pycache__
+ErinaBot/errors.log
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
